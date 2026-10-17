@@ -1,0 +1,19 @@
+databases:
+  - name: blogly-db
+    plan: free
+
+services:
+  - type: web
+    name: flask-blogly
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: blogly-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: PROD_APP_SETTINGS
+        value: config.ProductionConfig

@@ -1,30 +1,46 @@
+"""Blogly — a simple blog app (users, posts, tags).
+
+Configuration comes from environment variables — nothing secret lives in
+this repo.
+
+Required env vars:
+    DATABASE_URL  SQLAlchemy database URL (Render provides this; a
+                  postgres:// scheme is rewritten to postgresql:// for
+                  SQLAlchemy 2.0 compatibility)
+    SECRET_KEY    Flask secret key
+"""
 from flask import Flask, request, redirect, render_template, flash
-# from flask_debugtoolbar import DebugToolbarExtension
 from models import db, connect_db, User, Post, Tag
-import psycopg2
 import os
-import sqlalchemy
 
 app = Flask(__name__)
 
-database_uri = "postgresql+psycopg2://blogly_x519_user:PVGGb0k6fPqbGk9IjMNO48ZNBL1QYWRM@dpg-cng9ja0l6cac739mqv80-a.oregon-postgres.render.com:5432/blogly_x519"
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
+    raise RuntimeError("DATABASE_URL environment variable is not set.")
 
-app.config['SQLALCHEMY_DATABASE_URI'] = database_uri
+# Render Postgres connection strings use the postgres:// scheme, which
+# SQLAlchemy 2.0 no longer accepts.
+if database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+secret_key = os.environ.get("SECRET_KEY")
+if not secret_key:
+    raise RuntimeError("SECRET_KEY environment variable is not set.")
+
+app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'ihaveasecret'
-# app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {"pool_pre_ping": True}  
+app.config['SECRET_KEY'] = secret_key
 
-
-env_config = os.getenv("PROD_APP_SETTINGS", "config.DevelopmentConfig")
+env_config = os.getenv("PROD_APP_SETTINGS", "config.ProductionConfig")
 app.config.from_object(env_config)
-
-# app.config['DEBUG_TB_INTERCEPT_REDIRECTS'] = False
-
-# toolbar = DebugToolbarExtension(app)
 
 
 connect_db(app)
-# db.create_all()
+
+# Create any missing tables. Safe on every boot — never drops data.
+with app.app_context():
+    db.create_all()
 
 
 @app.route('/')
@@ -195,7 +211,7 @@ def posts_destroy(post_id):
 
     db.session.delete(post)
     db.session.commit()
-    flash(f"Post '{post.title} deleted.")
+    flash(f"Post '{post.title}' deleted.")
 
     return redirect(f"/users/{post.user_id}")
 
@@ -272,6 +288,7 @@ def tags_destroy(tag_id):
     """Handle form submission for deleting existing tag"""
 
     tag = Tag.query.get_or_404(tag_id)
+
     db.session.delete(tag)
     db.session.commit()
     flash(f"Tag '{tag.name}' deleted.")
